@@ -3,6 +3,7 @@ import { ScrollView, View, Text, StyleSheet, Alert } from 'react-native';
 import { Button, Card, Input, Badge } from '../components/ui';
 import { useAuth } from '../context/AuthContext';
 import { api } from '../api';
+import { apiExtra } from '../apiExtra';
 import { colors, spacing } from '../theme';
 import { SUBSCRIPTION_PRICE } from '../labels';
 
@@ -63,17 +64,61 @@ export default function ProfileScreen({ navigation }) {
     ]);
   }
 
+  // Mock SMS OTP — the server accepts the demo code "1234".
+  function verifyPhone() {
+    Alert.alert('אימות טלפון', 'נשלח אליך קוד ב-SMS. לצורך הדגמה הקוד הוא 1234.', [
+      { text: 'ביטול', style: 'cancel' },
+      {
+        text: 'אמת',
+        onPress: async () => {
+          try {
+            await apiExtra.verifyPhone('1234', token);
+            await refreshUser();
+            Alert.alert('אומת ✓', 'המספר אומת והפרופיל שלך מסומן כמאומת.');
+          } catch (e) {
+            Alert.alert('שגיאה', e.message);
+          }
+        },
+      },
+    ]);
+  }
+
   return (
     <ScrollView style={{ backgroundColor: colors.bg }} contentContainerStyle={{ padding: spacing.md }}>
       <Card>
         <View style={styles.headerRow}>
           <Text style={styles.role}>{isWorker ? 'פועל 👷' : 'קבלן 🏗️'}</Text>
-          <Badge
-            label={user?.isSubscribed ? 'מנוי פעיל' : 'ללא מנוי'}
-            tone={user?.isSubscribed ? 'accepted' : 'withdrawn'}
-          />
+          <View style={styles.badges}>
+            {user?.verified ? <Badge label="✓ מאומת" tone="accepted" /> : null}
+            <Badge
+              label={user?.isSubscribed ? 'מנוי פעיל' : 'ללא מנוי'}
+              tone={user?.isSubscribed ? 'accepted' : 'withdrawn'}
+            />
+          </View>
         </View>
         <Text style={styles.email}>{user?.email}</Text>
+        <View style={styles.quickRow}>
+          <Button
+            title="🔔 התראות"
+            variant="secondary"
+            onPress={() => navigation.navigate('Notifications')}
+            style={{ flex: 1 }}
+          />
+          <Button
+            title="⭐ הביקורות שלי"
+            variant="secondary"
+            onPress={() => navigation.navigate('Reviews', { userId: user.id, name: user.name })}
+            style={{ flex: 1 }}
+          />
+        </View>
+        {!user?.verified && (
+          <Button
+            title="📱 אמת מספר טלפון"
+            variant="ghost"
+            onPress={verifyPhone}
+            style={{ marginTop: spacing.sm }}
+          />
+        )}
       </Card>
 
       <Card>
@@ -129,6 +174,8 @@ export default function ProfileScreen({ navigation }) {
 
 const styles = StyleSheet.create({
   headerRow: { flexDirection: 'row-reverse', justifyContent: 'space-between', alignItems: 'center' },
+  badges: { flexDirection: 'row-reverse', gap: spacing.sm, alignItems: 'center' },
+  quickRow: { flexDirection: 'row-reverse', gap: spacing.md, marginTop: spacing.md },
   role: { color: colors.text, fontSize: 20, fontWeight: '800' },
   email: { color: colors.textMuted, marginTop: spacing.xs, textAlign: 'right' },
   section: { color: colors.text, fontSize: 16, fontWeight: '700', marginBottom: spacing.md, textAlign: 'right' },

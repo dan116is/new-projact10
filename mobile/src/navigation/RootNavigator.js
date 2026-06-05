@@ -17,6 +17,11 @@ import MyJobsScreen from '../screens/MyJobsScreen';
 import PostJobScreen from '../screens/PostJobScreen';
 import JobApplicantsScreen from '../screens/JobApplicantsScreen';
 import ProfileScreen from '../screens/ProfileScreen';
+import ConversationsScreen from '../screens/ConversationsScreen';
+import ChatScreen from '../screens/ChatScreen';
+import NotificationsScreen from '../screens/NotificationsScreen';
+import ReviewsScreen from '../screens/ReviewsScreen';
+import LeaveReviewScreen from '../screens/LeaveReviewScreen';
 
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -67,6 +72,11 @@ function WorkerTabs() {
         options={{ title: 'המועמדויות שלי', tabBarIcon: tabIcon('📋') }}
       />
       <Tab.Screen
+        name="Conversations"
+        component={ConversationsScreen}
+        options={{ title: 'שיחות', tabBarIcon: tabIcon('💬') }}
+      />
+      <Tab.Screen
         name="Profile"
         component={ProfileScreen}
         options={{ title: 'פרופיל', tabBarIcon: tabIcon('👤') }}
@@ -82,6 +92,11 @@ function ContractorTabs() {
         name="MyJobs"
         component={MyJobsScreen}
         options={{ title: 'המשרות שלי', tabBarIcon: tabIcon('🏗️') }}
+      />
+      <Tab.Screen
+        name="Conversations"
+        component={ConversationsScreen}
+        options={{ title: 'שיחות', tabBarIcon: tabIcon('💬') }}
       />
       <Tab.Screen
         name="Profile"
@@ -128,6 +143,26 @@ export default function RootNavigator() {
               name="Paywall"
               component={PaywallScreen}
               options={{ title: 'מנוי', presentation: 'modal' }}
+            />
+            <Stack.Screen
+              name="Chat"
+              component={ChatScreen}
+              options={({ route }) => ({ title: route.params?.title || 'שיחה' })}
+            />
+            <Stack.Screen
+              name="Notifications"
+              component={NotificationsScreen}
+              options={{ title: 'התראות' }}
+            />
+            <Stack.Screen
+              name="Reviews"
+              component={ReviewsScreen}
+              options={({ route }) => ({ title: `ביקורות — ${route.params?.name || ''}` })}
+            />
+            <Stack.Screen
+              name="LeaveReview"
+              component={LeaveReviewScreen}
+              options={{ title: 'השאר ביקורת', presentation: 'modal' }}
             />
           </>
         )}

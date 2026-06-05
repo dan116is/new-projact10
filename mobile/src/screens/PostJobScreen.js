@@ -1,9 +1,11 @@
 import React, { useState } from 'react';
 import { ScrollView, StyleSheet, Alert, Text } from 'react-native';
 import { Button, Input, Card } from '../components/ui';
+import PickerField from '../components/PickerField';
 import { useAuth } from '../context/AuthContext';
 import { api } from '../api';
 import { colors, spacing } from '../theme';
+import { TRADES, CITIES } from '../data/israel';
 
 export default function PostJobScreen({ navigation }) {
   const { token } = useAuth();
@@ -52,7 +54,13 @@ export default function PostJobScreen({ navigation }) {
       <Card>
         <Text style={styles.heading}>פרטי המשרה</Text>
         <Input label="כותרת" value={form.title} onChangeText={set('title')} placeholder="חשמלאי לפרויקט דירות" />
-        <Input label="מקצוע" value={form.trade} onChangeText={set('trade')} placeholder="חשמלאי / גבס / טייח..." />
+        <PickerField
+          label="מקצוע"
+          value={form.trade}
+          options={TRADES}
+          onSelect={set('trade')}
+          placeholder="בחרו מקצוע"
+        />
         <Input
           label="תיאור"
           value={form.description}
@@ -62,7 +70,13 @@ export default function PostJobScreen({ navigation }) {
           numberOfLines={4}
           style={{ height: 100, textAlignVertical: 'top' }}
         />
-        <Input label="מיקום" value={form.location} onChangeText={set('location')} placeholder="תל אביב" />
+        <PickerField
+          label="עיר"
+          value={form.location}
+          options={CITIES}
+          onSelect={set('location')}
+          placeholder="בחרו עיר"
+        />
         <Input
           label="תקציב (₪)"
           value={form.budget}

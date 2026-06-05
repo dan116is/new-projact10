@@ -4,10 +4,11 @@ import { useFocusEffect } from '@react-navigation/native';
 import { Card, Badge, Loader, EmptyState, Button } from '../components/ui';
 import { useAuth } from '../context/AuthContext';
 import { api } from '../api';
+import { apiExtra } from '../apiExtra';
 import { colors, spacing } from '../theme';
 import { applicationStatusLabel } from '../labels';
 
-export default function JobApplicantsScreen({ route }) {
+export default function JobApplicantsScreen({ route, navigation }) {
   const { jobId } = route.params;
   const { token } = useAuth();
   const [apps, setApps] = useState([]);
@@ -36,6 +37,18 @@ export default function JobApplicantsScreen({ route }) {
     try {
       await api.decideApplication(id, status, token);
       load();
+    } catch (e) {
+      Alert.alert('שגיאה', e.message);
+    }
+  }
+
+  async function openChat(worker) {
+    try {
+      const { conversation } = await apiExtra.openConversation(
+        { otherUserId: worker.id, jobId },
+        token
+      );
+      navigation.navigate('Chat', { conversationId: conversation.id, title: worker.name });
     } catch (e) {
       Alert.alert('שגיאה', e.message);
     }
@@ -91,6 +104,24 @@ export default function JobApplicantsScreen({ route }) {
           {item.status === 'accepted' && item.worker?.phone ? (
             <Text style={styles.phone}>📞 {item.worker.phone}</Text>
           ) : null}
+
+          {item.status === 'accepted' && (
+            <View style={styles.actions}>
+              <Button title="💬 שלח הודעה" onPress={() => openChat(item.worker)} style={{ flex: 1 }} />
+              <Button
+                title="⭐ השאר ביקורת"
+                variant="secondary"
+                onPress={() =>
+                  navigation.navigate('LeaveReview', {
+                    jobId,
+                    revieweeId: item.worker.id,
+                    name: item.worker.name,
+                  })
+                }
+                style={{ flex: 1 }}
+              />
+            </View>
+          )}
 
           {item.status === 'pending' && (
             <View style={styles.actions}>

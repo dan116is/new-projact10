@@ -4,10 +4,11 @@ import { useFocusEffect } from '@react-navigation/native';
 import { Card, Badge, Loader, EmptyState, Button } from '../components/ui';
 import { useAuth } from '../context/AuthContext';
 import { api } from '../api';
+import { apiExtra } from '../apiExtra';
 import { colors, spacing } from '../theme';
 import { applicationStatusLabel } from '../labels';
 
-export default function MyApplicationsScreen() {
+export default function MyApplicationsScreen({ navigation }) {
   const { token } = useAuth();
   const [apps, setApps] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -35,6 +36,18 @@ export default function MyApplicationsScreen() {
     try {
       await api.withdrawApplication(id, token);
       load();
+    } catch (e) {
+      Alert.alert('שגיאה', e.message);
+    }
+  }
+
+  async function openChat(contractor) {
+    try {
+      const { conversation } = await apiExtra.openConversation(
+        { otherUserId: contractor.id },
+        token
+      );
+      navigation.navigate('Chat', { conversationId: conversation.id, title: contractor.name });
     } catch (e) {
       Alert.alert('שגיאה', e.message);
     }
@@ -75,7 +88,28 @@ export default function MyApplicationsScreen() {
           {item.message ? <Text style={styles.message}>"{item.message}"</Text> : null}
 
           {item.status === 'accepted' && item.contractor && (
-            <Text style={styles.accepted}>🎉 התקבלת! הקבלן יצור איתך קשר.</Text>
+            <>
+              <Text style={styles.accepted}>🎉 התקבלת! אפשר ליצור קשר עם הקבלן.</Text>
+              <View style={styles.actions}>
+                <Button
+                  title="💬 צור קשר"
+                  onPress={() => openChat(item.contractor)}
+                  style={{ flex: 1 }}
+                />
+                <Button
+                  title="⭐ השאר ביקורת"
+                  variant="secondary"
+                  onPress={() =>
+                    navigation.navigate('LeaveReview', {
+                      jobId: item.job?.id,
+                      revieweeId: item.contractor.id,
+                      name: item.contractor.company || item.contractor.name,
+                    })
+                  }
+                  style={{ flex: 1 }}
+                />
+              </View>
+            </>
           )}
           {item.status === 'pending' && (
             <Button
@@ -98,4 +132,5 @@ const styles = StyleSheet.create({
   company: { color: colors.textMuted, marginTop: spacing.xs, textAlign: 'right' },
   message: { color: colors.text, fontStyle: 'italic', marginTop: spacing.sm, textAlign: 'right' },
   accepted: { color: colors.success, marginTop: spacing.sm, fontWeight: '700', textAlign: 'right' },
+  actions: { flexDirection: 'row-reverse', gap: spacing.md, marginTop: spacing.md },
 });

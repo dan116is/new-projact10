@@ -11,13 +11,19 @@ monthly subscription billed through Stripe.
 
 ## ✨ Features
 
+Built for the **Israeli market** 🇮🇱 — Hebrew, full RTL, ₪ pricing, Israeli trades & cities, and IL mobile-number validation.
+
 - **שני סוגי משתמשים / Two roles** — פועל (worker) או קבלן (contractor), נבחר בהרשמה.
-- **מנוי חודשי / Monthly subscription** — real Stripe recurring billing via PaymentSheet, with a webhook keeping subscription state in sync.
-- **Workflow מלא**:
-  - קבלן מפרסם משרה ← פועל מגיש מועמדות ← קבלן מאשר/דוחה ← פרטי קשר נחשפים.
+- **מנוי חודשי / Monthly subscription** — real Stripe recurring billing via PaymentSheet, with a webhook keeping subscription state in sync, plus an optional **free trial** (`STRIPE_TRIAL_DAYS`) to drive conversion.
+- **Workflow מלא**: קבלן מפרסם משרה ← פועל מגיש מועמדות ← קבלן מאשר/דוחה ← נפתח צ׳אט ופרטי הקשר נחשפים.
 - **Premium gating** — posting jobs (contractors) and applying (workers) require an active subscription (HTTP `402` otherwise).
-- **פרטיות / Privacy** — a worker's phone is revealed to the contractor **only after** the application is accepted, and the contractor's phone to the worker only then too.
-- JWT auth, profile management, RTL Hebrew UI.
+- **⭐ דירוגים וביקורות / Ratings & reviews** — both sides rate each other after working together; profiles show an aggregated star rating. Verified "worked-together" requirement + duplicate protection.
+- **💬 צ׳אט פנימי / In-app chat** — a conversation opens automatically when an application is accepted; real messaging with unread tracking.
+- **🔔 התראות / Notifications** — generated on new applications, acceptances, reviews and messages.
+- **✅ אימות / Verification** — a "מאומת" trust badge via a (mock) SMS OTP flow (demo code `1234`).
+- **🔎 לוקליזציה / Localization** — trade & city pickers from curated Israeli lists; VAT (מע"מ 18%) constant available.
+- **פרטיות / Privacy** — phone numbers are revealed only **after** an application is accepted.
+- JWT auth, profile management, dark RTL Hebrew UI.
 
 ---
 
@@ -153,9 +159,18 @@ to the same `pk_test_…`.
 | GET    | `/api/applications/mine`               | worker      |                                    |
 | GET    | `/api/applications/jobs/:jobId`        | contractor  | applicants for a job               |
 | PATCH  | `/api/applications/:id`                | contractor  | `{status: accepted\|rejected}`     |
-| GET    | `/api/subscriptions/config`            | bearer      | publishable key + price            |
+| GET    | `/api/subscriptions/config`            | bearer      | publishable key + price + plan     |
 | POST   | `/api/subscriptions/payment-sheet`     | bearer      | returns PaymentSheet params        |
 | POST   | `/api/subscriptions/webhook`           | Stripe sig  | raw body                           |
+| POST   | `/api/reviews`                         | bearer      | rate a user you worked with        |
+| GET    | `/api/reviews/user/:userId`            | bearer      | reviews + average rating           |
+| GET    | `/api/conversations`                   | bearer      | my chats                           |
+| POST   | `/api/conversations`                   | bearer      | open/find a chat                   |
+| GET    | `/api/conversations/:id/messages`      | bearer      | messages (marks read)              |
+| POST   | `/api/conversations/:id/messages`      | bearer      | send a message                     |
+| GET    | `/api/notifications`                   | bearer      | my notifications + unread count    |
+| GET    | `/api/profiles/:userId`                | bearer      | public profile + rating + verified |
+| POST   | `/api/profiles/verify`                 | bearer      | mock SMS OTP (demo code `1234`)    |
 
 Premium-gated routes return **`402`** with `{ code: "SUBSCRIPTION_REQUIRED" }`.
 
