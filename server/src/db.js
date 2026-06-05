@@ -6,8 +6,9 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const DATA_DIR = path.join(__dirname, '..', 'data');
-const DB_FILE = path.join(DATA_DIR, 'db.json');
+// DB location is overridable via DB_FILE (used by tests for isolation).
+const DB_FILE = process.env.DB_FILE || path.join(__dirname, '..', 'data', 'db.json');
+const DATA_DIR = path.dirname(DB_FILE);
 
 const EMPTY = {
   users: [], // { id, role, name, email, phone, passwordHash, profile, verified, stripeCustomerId, subscription, createdAt }

@@ -1,0 +1,260 @@
+// Integration tests for the API. Uses an isolated temp DB and the built-in
+// node:test runner — no external test deps. Run with: npm test
+import { test, before, after } from 'node:test';
+import assert from 'node:assert/strict';
+import os from 'node:os';
+import path from 'node:path';
+import fs from 'node:fs';
+
+// Configure an isolated environment BEFORE importing the app/db.
+const TMP_DB = path.join(os.tmpdir(), `pk-test-${process.pid}-${Date.now()}.json`);
+process.env.DB_FILE = TMP_DB;
+process.env.JWT_SECRET = 'test-secret-that-is-definitely-long-enough-1234567890';
+process.env.NODE_ENV = 'test';
+
+const { default: app } = await import('../src/index.js');
+const { db } = await import('../src/db.js');
+
+let server;
+let base;
+
+before(async () => {
+  server = app.listen(0);
+  await new Promise((r) => server.once('listening', r));
+  base = `http://127.0.0.1:${server.address().port}/api`;
+});
+
+after(() => {
+  server?.close();
+  try {
+    fs.unlinkSync(TMP_DB);
+  } catch {}
+});
+
+// --- helpers ----------------------------------------------------------------
+async function req(method, path, { body, token } = {}) {
+  const res = await fetch(`${base}${path}`, {
+    method,
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  const text = await res.text();
+  return { status: res.status, data: text ? JSON.parse(text) : {} };
+}
+
+function grantSubscription(userId) {
+  const user = db.data.users.find((u) => u.id === userId);
+  user.subscription = {
+    id: 'test_sub',
+    status: 'active',
+    priceId: 'test',
+    currentPeriodEnd: Math.floor(Date.now() / 1000) + 86400,
+    cancelAtPeriodEnd: false,
+  };
+  db.save();
+}
+
+// --- shared state across ordered tests --------------------------------------
+const ctx = {};
+
+// --- tests ------------------------------------------------------------------
+test('health endpoint responds', async () => {
+  const { status, data } = await req('GET', '/health');
+  assert.equal(status, 200);
+  assert.equal(data.ok, true);
+});
+
+test('register rejects invalid email', async () => {
+  const { status } = await req('POST', '/auth/register', {
+    body: { name: 'X', email: 'not-an-email', password: 'secret1', role: 'worker' },
+  });
+  assert.equal(status, 400);
+});
+
+test('register rejects short password', async () => {
+  const { status } = await req('POST', '/auth/register', {
+    body: { name: 'X', email: 'x@test.com', password: '123', role: 'worker' },
+  });
+  assert.equal(status, 400);
+});
+
+test('register rejects invalid role', async () => {
+  const { status } = await req('POST', '/auth/register', {
+    body: { name: 'X', email: 'x2@test.com', password: 'secret1', role: 'admin' },
+  });
+  assert.equal(status, 400);
+});
+
+test('register contractor and worker', async () => {
+  const c = await req('POST', '/auth/register', {
+    body: { name: 'קבלן', email: 'c@test.com', password: 'secret1', role: 'contractor' },
+  });
+  assert.equal(c.status, 201);
+  assert.ok(c.data.token);
+  assert.equal(c.data.user.isSubscribed, false);
+  ctx.contractorToken = c.data.token;
+  ctx.contractorId = c.data.user.id;
+
+  const w = await req('POST', '/auth/register', {
+    body: { name: 'פועל', email: 'w@test.com', password: 'secret1', role: 'worker', phone: '0521234567' },
+  });
+  assert.equal(w.status, 201);
+  ctx.workerToken = w.data.token;
+  ctx.workerId = w.data.user.id;
+});
+
+test('duplicate email is rejected', async () => {
+  const { status } = await req('POST', '/auth/register', {
+    body: { name: 'dup', email: 'c@test.com', password: 'secret1', role: 'worker' },
+  });
+  assert.equal(status, 409);
+});
+
+test('login with wrong password fails', async () => {
+  const { status } = await req('POST', '/auth/login', {
+    body: { email: 'c@test.com', password: 'wrongpass' },
+  });
+  assert.equal(status, 401);
+});
+
+test('protected route requires a token', async () => {
+  const { status } = await req('GET', '/auth/me');
+  assert.equal(status, 401);
+});
+
+test('posting a job requires a subscription (402)', async () => {
+  const { status, data } = await req('POST', '/jobs', {
+    token: ctx.contractorToken,
+    body: { title: 'עבודה', trade: 'חשמלאי' },
+  });
+  assert.equal(status, 402);
+  assert.equal(data.code, 'SUBSCRIPTION_REQUIRED');
+});
+
+test('subscribed contractor can post a job', async () => {
+  grantSubscription(ctx.contractorId);
+  const { status, data } = await req('POST', '/jobs', {
+    token: ctx.contractorToken,
+    body: { title: 'חשמלאי לדירה', trade: 'חשמלאי', location: 'תל אביב-יפו', budget: 10000 },
+  });
+  assert.equal(status, 201);
+  assert.equal(data.job.status, 'open');
+  ctx.jobId = data.job.id;
+});
+
+test('applying requires a subscription (402)', async () => {
+  const { status } = await req('POST', `/applications/jobs/${ctx.jobId}/apply`, {
+    token: ctx.workerToken,
+    body: { message: 'hi' },
+  });
+  assert.equal(status, 402);
+});
+
+test('subscribed worker can apply; contractor is notified', async () => {
+  grantSubscription(ctx.workerId);
+  const { status, data } = await req('POST', `/applications/jobs/${ctx.jobId}/apply`, {
+    token: ctx.workerToken,
+    body: { message: 'זמין מיידית' },
+  });
+  assert.equal(status, 201);
+  ctx.appId = data.application.id;
+  // worker phone must be hidden before acceptance
+  assert.equal(data.application.worker.phone, undefined);
+
+  const notif = await req('GET', '/notifications', { token: ctx.contractorToken });
+  assert.ok(notif.data.notifications.some((n) => n.type === 'application'));
+});
+
+test('accepting reveals contact, opens chat, notifies worker', async () => {
+  const { status, data } = await req('PATCH', `/applications/${ctx.appId}`, {
+    token: ctx.contractorToken,
+    body: { status: 'accepted' },
+  });
+  assert.equal(status, 200);
+  assert.equal(data.application.status, 'accepted');
+  assert.equal(data.application.job.status, 'in_progress');
+
+  const convos = await req('GET', '/conversations', { token: ctx.contractorToken });
+  assert.equal(convos.data.conversations.length, 1);
+  ctx.convId = convos.data.conversations[0].id;
+
+  const wn = await req('GET', '/notifications', { token: ctx.workerToken });
+  assert.ok(wn.data.notifications.some((n) => n.title.includes('התקבלת')));
+});
+
+test('messaging works between participants', async () => {
+  const send = await req('POST', `/conversations/${ctx.convId}/messages`, {
+    token: ctx.workerToken,
+    body: { body: 'מתי להגיע?' },
+  });
+  assert.equal(send.status, 201);
+
+  const read = await req('GET', `/conversations/${ctx.convId}/messages`, {
+    token: ctx.contractorToken,
+  });
+  assert.equal(read.data.messages.length, 1);
+  assert.equal(read.data.messages[0].mine, false);
+});
+
+test('non-participant cannot read a conversation', async () => {
+  const stranger = await req('POST', '/auth/register', {
+    body: { name: 's', email: 's@test.com', password: 'secret1', role: 'worker' },
+  });
+  const { status } = await req('GET', `/conversations/${ctx.convId}/messages`, {
+    token: stranger.data.token,
+  });
+  assert.equal(status, 403);
+});
+
+test('reviews: create, aggregate, and block duplicates', async () => {
+  const r = await req('POST', '/reviews', {
+    token: ctx.contractorToken,
+    body: { jobId: ctx.jobId, revieweeId: ctx.workerId, rating: 5, comment: 'מצוין' },
+  });
+  assert.equal(r.status, 201);
+
+  const dup = await req('POST', '/reviews', {
+    token: ctx.contractorToken,
+    body: { jobId: ctx.jobId, revieweeId: ctx.workerId, rating: 4 },
+  });
+  assert.equal(dup.status, 409);
+
+  const prof = await req('GET', `/profiles/${ctx.workerId}`, { token: ctx.contractorToken });
+  assert.equal(prof.data.rating.average, 5);
+  assert.equal(prof.data.rating.count, 1);
+});
+
+test('cannot review someone you did not work with', async () => {
+  const { status } = await req('POST', '/reviews', {
+    token: ctx.workerToken,
+    body: { jobId: ctx.jobId, revieweeId: 'nonexistent-user', rating: 5 },
+  });
+  assert.ok(status === 403 || status === 404);
+});
+
+test('phone verification: wrong code rejected, correct code accepted', async () => {
+  const bad = await req('POST', '/profiles/verify', {
+    token: ctx.workerToken,
+    body: { code: '0000' },
+  });
+  assert.equal(bad.status, 400);
+
+  const ok = await req('POST', '/profiles/verify', {
+    token: ctx.workerToken,
+    body: { code: '1234' },
+  });
+  assert.equal(ok.status, 200);
+  assert.equal(ok.data.verified, true);
+});
+
+test('malformed JSON returns 400, not 500', async () => {
+  const res = await fetch(`${base}/auth/login`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: '{ bad json',
+  });
+  assert.equal(res.status, 400);
+});

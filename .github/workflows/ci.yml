@@ -21,6 +21,9 @@ jobs:
         working-directory: server
         run: |
           for f in $(find src -name '*.js'); do node --check "$f"; done
+      - name: Run test suite
+        working-directory: server
+        run: npm test
       - name: Smoke test API
         working-directory: server
         run: |

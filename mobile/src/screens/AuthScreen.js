@@ -9,6 +9,7 @@ import {
   TouchableOpacity,
 } from 'react-native';
 import { Button, Input } from '../components/ui';
+import { isValidIsraeliMobile } from '../data/israel';
 import { useAuth } from '../context/AuthContext';
 import { colors, spacing } from '../theme';
 
@@ -46,6 +47,16 @@ export default function AuthScreen() {
 
   async function submit() {
     setError(null);
+    if (mode === 'register') {
+      if (form.password.length < 6) {
+        setError('הסיסמה חייבת להכיל לפחות 6 תווים');
+        return;
+      }
+      if (form.phone.trim() && !isValidIsraeliMobile(form.phone)) {
+        setError('מספר טלפון לא תקין (פורמט: 05X-XXXXXXX)');
+        return;
+      }
+    }
     setLoading(true);
     try {
       if (mode === 'login') {

@@ -6,6 +6,15 @@ import { db } from './db.js';
 const JWT_SECRET = process.env.JWT_SECRET || 'dev-insecure-secret';
 const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '30d';
 
+// Refuse to run in production with a weak/default signing secret.
+if (process.env.NODE_ENV === 'production') {
+  if (!process.env.JWT_SECRET || JWT_SECRET === 'dev-insecure-secret' || JWT_SECRET.length < 32) {
+    throw new Error(
+      'JWT_SECRET must be set to a strong random value (>=32 chars) in production.'
+    );
+  }
+}
+
 export function hashPassword(plain) {
   return bcrypt.hashSync(plain, 10);
 }

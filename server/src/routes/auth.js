@@ -9,6 +9,7 @@ import {
   publicUser,
   requireAuth,
 } from '../auth.js';
+import { isValidEmail, isValidPassword, PASSWORD_MIN, clip } from '../security.js';
 
 const router = Router();
 
@@ -24,6 +25,12 @@ router.post('/register', (req, res) => {
     return res.status(400).json({ error: `role must be one of: ${ROLES.join(', ')}` });
   }
   const normalizedEmail = String(email).trim().toLowerCase();
+  if (!isValidEmail(normalizedEmail)) {
+    return res.status(400).json({ error: 'כתובת אימייל לא תקינה' });
+  }
+  if (!isValidPassword(password)) {
+    return res.status(400).json({ error: `הסיסמה חייבת להכיל לפחות ${PASSWORD_MIN} תווים` });
+  }
   if (db.data.users.some((u) => u.email === normalizedEmail)) {
     return res.status(409).json({ error: 'Email already registered' });
   }
@@ -31,9 +38,9 @@ router.post('/register', (req, res) => {
   const user = {
     id: randomUUID(),
     role,
-    name: String(name).trim(),
+    name: clip(name, 80),
     email: normalizedEmail,
-    phone: phone ? String(phone).trim() : null,
+    phone: phone ? clip(phone, 20) : null,
     passwordHash: hashPassword(String(password)),
     // Free-form, role-specific profile (trades, hourly rate, company name, etc.)
     profile: profile && typeof profile === 'object' ? profile : {},
@@ -69,8 +76,8 @@ router.get('/me', requireAuth, (req, res) => {
 // Update the current user's profile (name, phone, profile blob).
 router.patch('/me', requireAuth, (req, res) => {
   const { name, phone, profile } = req.body || {};
-  if (name !== undefined) req.user.name = String(name).trim();
-  if (phone !== undefined) req.user.phone = phone ? String(phone).trim() : null;
+  if (name !== undefined) req.user.name = clip(name, 80);
+  if (phone !== undefined) req.user.phone = phone ? clip(phone, 20) : null;
   if (profile !== undefined && typeof profile === 'object') {
     req.user.profile = { ...req.user.profile, ...profile };
   }

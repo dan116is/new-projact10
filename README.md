@@ -176,10 +176,26 @@ Premium-gated routes return **`402`** with `{ code: "SUBSCRIPTION_REQUIRED" }`.
 
 ---
 
-## 🧪 CI
+## 🔒 Security
 
-`.github/workflows/ci.yml` installs both packages, syntax-checks the server,
-boots it for a `/health` smoke test, and validates the mobile config on every push/PR.
+Hardening applied to the API:
+
+- **Helmet** security headers on every response.
+- **Rate limiting** — global API cap plus a stricter limit on `login`/`register` to deter brute force (HTTP `429` with `Retry-After`).
+- **Strong-secret enforcement** — the server refuses to boot in `NODE_ENV=production` unless `JWT_SECRET` is set and ≥32 chars.
+- **Input validation** — email format, password length, role whitelist, capped field lengths, and a `100kb` JSON body limit.
+- **Central error handler** — malformed JSON → `400`, oversized body → `413`, unexpected errors → generic `500` (no stack traces leaked).
+- **Least-disclosure** — passwords are bcrypt-hashed and never returned; phone numbers are revealed only after an application is accepted; public profiles omit email/phone.
+- **AuthZ everywhere** — every mutating route checks ownership/participation (job owner, conversation participant, "worked-together" rule for reviews).
+
+## 🧪 Tests & CI
+
+- **`npm test`** (in `server/`) runs an integration suite on the built-in `node:test`
+  runner against an isolated temp DB — covering auth, validation, subscription
+  gating, the full apply→accept→chat→review workflow, authorization, and error handling.
+- `.github/workflows/ci.yml` installs both packages, syntax-checks the server,
+  **runs the test suite**, boots the API for a `/health` smoke test, and validates
+  the mobile config on every push/PR.
 
 ---
 
@@ -187,4 +203,6 @@ boots it for a `/health` smoke test, and validates the mobile config on every pu
 
 - The backend uses a JSON-file store for zero-setup demos. Swap `db.js` for a
   real database (Postgres/Mongo) before production.
-- Use long random `JWT_SECRET`, real Stripe **live** keys, and HTTPS in production.
+- For production set `NODE_ENV=production`, a long random `JWT_SECRET`
+  (`node -e "console.log(require('crypto').randomBytes(48).toString('hex'))"`),
+  an explicit `CORS_ORIGIN`, real Stripe **live** keys, and serve over HTTPS.
