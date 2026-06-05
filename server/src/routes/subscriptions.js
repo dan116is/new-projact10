@@ -21,6 +21,28 @@ router.get('/config', requireAuth, (req, res) => {
     configured: stripeConfigured(),
     publishableKey: process.env.STRIPE_PUBLISHABLE_KEY || null,
     priceId: process.env.STRIPE_PRICE_ID || null,
+    trialDays: Number(process.env.STRIPE_TRIAL_DAYS || 0),
+    plan: {
+      name: 'מנוי מקצועי',
+      priceLabel: process.env.SUBSCRIPTION_PRICE_LABEL || '₪49 / חודש',
+      currency: 'ils',
+      perks:
+        req.user.role === 'contractor'
+          ? [
+              'פרסום משרות ללא הגבלה',
+              'גישה לכל הפועלים המאומתים',
+              'צ׳אט ישיר עם מועמדים',
+              'דירוגים וביקורות לבניית מוניטין',
+              'התראות בזמן אמת על מועמדים חדשים',
+            ]
+          : [
+              'גישה לכל המשרות הפתוחות',
+              'הגשת מועמדות ללא הגבלה',
+              'צ׳אט ישיר עם קבלנים',
+              'פרופיל מקצועי עם דירוגים',
+              'התראות על משרות שמתאימות לך',
+            ],
+    },
   });
 });
 
@@ -65,11 +87,14 @@ router.post('/payment-sheet', requireAuth, async (req, res) => {
       });
     }
     if (!subscription || subscription.status === 'canceled') {
+      // Optional free trial (e.g. 7 days) — strong conversion lever.
+      const trialDays = Number(process.env.STRIPE_TRIAL_DAYS || 0);
       subscription = await stripe.subscriptions.create({
         customer: customerId,
         items: [{ price: priceId }],
         payment_behavior: 'default_incomplete',
         payment_settings: { save_default_payment_method: 'on_subscription' },
+        ...(trialDays > 0 ? { trial_period_days: trialDays } : {}),
         expand: ['latest_invoice.payment_intent'],
         metadata: { userId: req.user.id },
       });

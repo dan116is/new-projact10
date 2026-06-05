@@ -10,9 +10,13 @@ const DATA_DIR = path.join(__dirname, '..', 'data');
 const DB_FILE = path.join(DATA_DIR, 'db.json');
 
 const EMPTY = {
-  users: [], // { id, role, name, email, phone, passwordHash, profile, stripeCustomerId, subscription, createdAt }
-  jobs: [], // { id, contractorId, title, trade, description, location, budget, status, createdAt }
+  users: [], // { id, role, name, email, phone, passwordHash, profile, verified, stripeCustomerId, subscription, createdAt }
+  jobs: [], // { id, contractorId, title, trade, description, city, budget, status, createdAt }
   applications: [], // { id, jobId, workerId, message, status, createdAt }
+  reviews: [], // { id, jobId, reviewerId, revieweeId, rating, comment, createdAt }
+  conversations: [], // { id, participantIds:[a,b], jobId, lastMessageAt, createdAt }
+  messages: [], // { id, conversationId, senderId, body, readBy:[], createdAt }
+  notifications: [], // { id, userId, type, title, body, data, read, createdAt }
 };
 
 let cache = null;
