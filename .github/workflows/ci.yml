@@ -1,0 +1,47 @@
+name: CI
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+
+jobs:
+  server:
+    name: Server – syntax & smoke test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Install server deps
+        working-directory: server
+        run: npm install --no-audit --no-fund
+      - name: Syntax check all server files
+        working-directory: server
+        run: |
+          for f in $(find src -name '*.js'); do node --check "$f"; done
+      - name: Smoke test API
+        working-directory: server
+        run: |
+          npm run seed
+          PORT=4099 node src/index.js &
+          SERVER_PID=$!
+          sleep 2
+          curl -sf localhost:4099/api/health
+          kill $SERVER_PID
+
+  mobile:
+    name: Mobile – install & syntax
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Install mobile deps
+        working-directory: mobile
+        run: npm install --no-audit --no-fund
+      - name: Validate app config
+        working-directory: mobile
+        run: node -e "JSON.parse(require('fs').readFileSync('app.json','utf8')); console.log('app.json OK')"

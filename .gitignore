@@ -1,0 +1,25 @@
+# dependencies
+node_modules/
+
+# env / secrets
+.env
+.env.local
+*.env
+
+# server data store (runtime-generated)
+server/data/
+
+# expo / RN
+.expo/
+mobile/.expo/
+dist/
+web-build/
+*.log
+npm-debug.*
+yarn-error.*
+
+# os / editor
+.DS_Store
+*.swp
+.idea/
+.vscode/

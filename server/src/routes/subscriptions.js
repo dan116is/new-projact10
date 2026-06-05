@@ -1,0 +1,136 @@
+// Subscription billing via Stripe.
+//
+// Flow (PaymentSheet on mobile):
+//   1. POST /subscriptions/payment-sheet
+//        -> ensures a Stripe Customer, creates an incomplete Subscription,
+//           returns { paymentIntentClientSecret, ephemeralKey, customerId, publishableKey }
+//   2. The app presents Stripe PaymentSheet with those values.
+//   3. On success, Stripe fires `invoice.paid` / `customer.subscription.updated`
+//        to our webhook, which flips the user to "active".
+//   4. The app refreshes GET /auth/me and sees isSubscribed: true.
+import { Router } from 'express';
+import { db } from '../db.js';
+import { requireAuth, publicUser } from '../auth.js';
+import { getStripe, stripeConfigured, toStoredSubscription } from '../stripe.js';
+
+const router = Router();
+
+// Expose pricing / config so the app can render the paywall.
+router.get('/config', requireAuth, (req, res) => {
+  res.json({
+    configured: stripeConfigured(),
+    publishableKey: process.env.STRIPE_PUBLISHABLE_KEY || null,
+    priceId: process.env.STRIPE_PRICE_ID || null,
+  });
+});
+
+async function ensureCustomer(user) {
+  const stripe = getStripe();
+  if (user.stripeCustomerId) {
+    try {
+      const existing = await stripe.customers.retrieve(user.stripeCustomerId);
+      if (existing && !existing.deleted) return user.stripeCustomerId;
+    } catch {
+      // fall through and recreate
+    }
+  }
+  const customer = await stripe.customers.create({
+    email: user.email,
+    name: user.name,
+    metadata: { userId: user.id, role: user.role },
+  });
+  user.stripeCustomerId = customer.id;
+  db.save();
+  return customer.id;
+}
+
+router.post('/payment-sheet', requireAuth, async (req, res) => {
+  try {
+    if (!stripeConfigured()) {
+      return res.status(503).json({ error: 'Stripe is not configured on the server' });
+    }
+    const priceId = process.env.STRIPE_PRICE_ID;
+    if (!priceId || priceId.startsWith('price_xxx')) {
+      return res.status(503).json({ error: 'STRIPE_PRICE_ID is not configured' });
+    }
+    const stripe = getStripe();
+    const customerId = await ensureCustomer(req.user);
+
+    // Reuse an existing incomplete subscription if the user retries.
+    let subscription;
+    const existing = req.user.subscription;
+    if (existing?.id && ['incomplete', 'past_due'].includes(existing.status)) {
+      subscription = await stripe.subscriptions.retrieve(existing.id, {
+        expand: ['latest_invoice.payment_intent'],
+      });
+    }
+    if (!subscription || subscription.status === 'canceled') {
+      subscription = await stripe.subscriptions.create({
+        customer: customerId,
+        items: [{ price: priceId }],
+        payment_behavior: 'default_incomplete',
+        payment_settings: { save_default_payment_method: 'on_subscription' },
+        expand: ['latest_invoice.payment_intent'],
+        metadata: { userId: req.user.id },
+      });
+    }
+
+    req.user.subscription = toStoredSubscription(subscription);
+    db.save();
+
+    const ephemeralKey = await stripe.ephemeralKeys.create(
+      { customer: customerId },
+      { apiVersion: '2024-06-20' }
+    );
+
+    const paymentIntent = subscription.latest_invoice?.payment_intent;
+    res.json({
+      subscriptionId: subscription.id,
+      paymentIntentClientSecret: paymentIntent?.client_secret || null,
+      ephemeralKey: ephemeralKey.secret,
+      customerId,
+      publishableKey: process.env.STRIPE_PUBLISHABLE_KEY || null,
+    });
+  } catch (err) {
+    console.error('payment-sheet error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Pull latest subscription state from Stripe (fallback when webhooks aren't wired).
+router.post('/refresh', requireAuth, async (req, res) => {
+  try {
+    if (!req.user.subscription?.id || !stripeConfigured()) {
+      return res.json({ user: publicUser(req.user) });
+    }
+    const stripe = getStripe();
+    const sub = await stripe.subscriptions.retrieve(req.user.subscription.id);
+    req.user.subscription = toStoredSubscription(sub);
+    db.save();
+    res.json({ user: publicUser(req.user) });
+  } catch (err) {
+    console.error('refresh error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Cancel at period end (keeps access until the paid period ends).
+router.post('/cancel', requireAuth, async (req, res) => {
+  try {
+    if (!req.user.subscription?.id || !stripeConfigured()) {
+      return res.status(400).json({ error: 'No active subscription' });
+    }
+    const stripe = getStripe();
+    const sub = await stripe.subscriptions.update(req.user.subscription.id, {
+      cancel_at_period_end: true,
+    });
+    req.user.subscription = toStoredSubscription(sub);
+    db.save();
+    res.json({ user: publicUser(req.user) });
+  } catch (err) {
+    console.error('cancel error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+export default router;

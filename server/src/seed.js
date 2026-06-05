@@ -1,0 +1,77 @@
+// Seed a few demo users + jobs so the app has something to show immediately.
+// Run with: npm run seed
+import 'dotenv/config';
+import { randomUUID } from 'crypto';
+import { db } from './db.js';
+import { hashPassword } from './auth.js';
+
+db.reset();
+
+// A demo subscription far in the future so gated features work without Stripe.
+const activeSub = {
+  id: 'demo_sub',
+  status: 'active',
+  priceId: 'demo_price',
+  currentPeriodEnd: Math.floor(Date.now() / 1000) + 60 * 60 * 24 * 365,
+  cancelAtPeriodEnd: false,
+};
+
+const contractor = {
+  id: randomUUID(),
+  role: 'contractor',
+  name: 'דני בנייה בע"מ',
+  email: 'contractor@demo.com',
+  phone: '050-1112222',
+  passwordHash: hashPassword('demo1234'),
+  profile: { company: 'דני בנייה בע"מ', city: 'תל אביב' },
+  stripeCustomerId: null,
+  subscription: activeSub,
+  createdAt: new Date().toISOString(),
+};
+
+const worker = {
+  id: randomUUID(),
+  role: 'worker',
+  name: 'יוסי כהן',
+  email: 'worker@demo.com',
+  phone: '052-3334444',
+  passwordHash: hashPassword('demo1234'),
+  profile: { trades: ['חשמלאי', 'גבס'], hourlyRate: 90, experienceYears: 8, city: 'רמת גן' },
+  stripeCustomerId: null,
+  subscription: activeSub,
+  createdAt: new Date().toISOString(),
+};
+
+db.data.users.push(contractor, worker);
+
+db.data.jobs.push(
+  {
+    id: randomUUID(),
+    contractorId: contractor.id,
+    title: 'חשמלאי לפרויקט דירות',
+    trade: 'חשמלאי',
+    description: 'דרוש חשמלאי מוסמך ל-3 דירות בבניין חדש. עבודה ל-3 שבועות.',
+    location: 'תל אביב',
+    budget: 15000,
+    status: 'open',
+    createdAt: new Date().toISOString(),
+  },
+  {
+    id: randomUUID(),
+    contractorId: contractor.id,
+    title: 'עבודות גבס ושפכטל',
+    trade: 'גבס',
+    description: 'התקנת קירות גבס וביצוע שפכטל בקומת משרדים.',
+    location: 'רמת גן',
+    budget: 22000,
+    status: 'open',
+    createdAt: new Date().toISOString(),
+  }
+);
+
+db.save();
+
+console.log('Seeded demo data:');
+console.log('  Contractor login: contractor@demo.com / demo1234');
+console.log('  Worker login:     worker@demo.com / demo1234');
+console.log(`  Jobs: ${db.data.jobs.length}`);
