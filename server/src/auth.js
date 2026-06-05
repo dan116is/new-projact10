@@ -26,6 +26,7 @@ export function publicUser(user) {
   const { passwordHash, stripeCustomerId, ...rest } = user;
   return {
     ...rest,
+    verified: !!user.verified,
     isSubscribed: isSubscriptionActive(user),
   };
 }

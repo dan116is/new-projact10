@@ -3,6 +3,28 @@ import { Router } from 'express';
 import { randomUUID } from 'crypto';
 import { db } from '../db.js';
 import { requireAuth, requireRole, requireSubscription } from '../auth.js';
+import { pushNotification } from '../notify.js';
+
+// Find an existing contractor⇄worker conversation for a job, or create one.
+function ensureConversation(contractorId, workerId, jobId) {
+  let convo = db.data.conversations.find(
+    (c) =>
+      c.jobId === jobId &&
+      c.participantIds.includes(contractorId) &&
+      c.participantIds.includes(workerId)
+  );
+  if (!convo) {
+    convo = {
+      id: randomUUID(),
+      participantIds: [contractorId, workerId],
+      jobId,
+      lastMessageAt: null,
+      createdAt: new Date().toISOString(),
+    };
+    db.data.conversations.push(convo);
+  }
+  return convo;
+}
 
 const router = Router();
 
@@ -63,6 +85,13 @@ router.post(
     };
     db.data.applications.push(application);
     db.save();
+    // Notify the contractor that a worker applied.
+    pushNotification(job.contractorId, {
+      type: 'application',
+      title: 'מועמדות חדשה למשרה',
+      body: `${req.user.name} הגיש מועמדות ל"${job.title}"`,
+      data: { jobId: job.id, applicationId: application.id },
+    });
     res.status(201).json({ application: publicApplication(application) });
   }
 );
@@ -101,9 +130,23 @@ router.patch('/:id', requireAuth, requireRole('contractor'), (req, res) => {
     return res.status(400).json({ error: 'status must be accepted or rejected' });
   }
   application.status = status;
-  // Accepting moves the job into progress so it stops accepting new applicants.
-  if (status === 'accepted') job.status = 'in_progress';
+  // Accepting moves the job into progress so it stops accepting new applicants,
+  // and opens a chat between the contractor and the accepted worker.
+  if (status === 'accepted') {
+    job.status = 'in_progress';
+    ensureConversation(job.contractorId, application.workerId, job.id);
+  }
   db.save();
+  // Notify the worker of the decision.
+  pushNotification(application.workerId, {
+    type: 'application',
+    title: status === 'accepted' ? '🎉 התקבלת למשרה!' : 'עדכון על מועמדות',
+    body:
+      status === 'accepted'
+        ? `הקבלן אישר אותך ל"${job.title}". אפשר להתחיל בצ׳אט.`
+        : `המועמדות שלך ל"${job.title}" נדחתה.`,
+    data: { jobId: job.id, applicationId: application.id },
+  });
   res.json({ application: publicApplication(application) });
 });
 
