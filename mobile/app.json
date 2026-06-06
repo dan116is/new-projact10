@@ -1,0 +1,37 @@
+{
+  "expo": {
+    "name": "פועלים וקבלנים",
+    "slug": "poalim-kablanim",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "scheme": "poalimkablanim",
+    "splash": {
+      "resizeMode": "contain",
+      "backgroundColor": "#0F172A"
+    },
+    "assetBundlePatterns": ["**/*"],
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.demo.poalimkablanim"
+    },
+    "android": {
+      "package": "com.demo.poalimkablanim"
+    },
+    "web": {
+      "bundler": "metro"
+    },
+    "plugins": [
+      [
+        "@stripe/stripe-react-native",
+        {
+          "merchantIdentifier": "merchant.com.demo.poalimkablanim",
+          "enableGooglePay": true
+        }
+      ]
+    ],
+    "extra": {
+      "apiUrl": "http://localhost:4000"
+    }
+  }
+}
