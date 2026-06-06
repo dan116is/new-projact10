@@ -364,6 +364,38 @@ test('only the job owner can change its status', async () => {
   assert.ok(status === 403);
 });
 
+test('forged Stripe webhook is rejected and grants no subscription', async () => {
+  // Fresh, unsubscribed victim.
+  const victim = await req('POST', '/auth/register', {
+    body: { name: 'קורבן', email: 'victim@test.com', password: 'secret1', role: 'contractor' },
+  });
+  const victimId = victim.data.user.id;
+  assert.equal(victim.data.user.isSubscribed, false);
+
+  // Attacker forges an "active subscription" event for the victim.
+  const res = await fetch(`${base}/subscriptions/webhook`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      type: 'customer.subscription.updated',
+      data: {
+        object: {
+          id: 'sub_forged',
+          customer: 'cus_x',
+          status: 'active',
+          metadata: { userId: victimId },
+          items: { data: [{ price: { id: 'price_pro' } }] },
+        },
+      },
+    }),
+  });
+  // No signing secret configured in tests → must be rejected, not trusted.
+  assert.ok(res.status === 503 || res.status === 400);
+
+  const stored = db.data.users.find((u) => u.id === victimId);
+  assert.equal(stored.subscription, null);
+});
+
 test('malformed JSON returns 400, not 500', async () => {
   const res = await fetch(`${base}/auth/login`, {
     method: 'POST',

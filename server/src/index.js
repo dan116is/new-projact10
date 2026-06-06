@@ -38,14 +38,16 @@ app.post(
   (req, res) => {
     const sig = req.headers['stripe-signature'];
     const secret = process.env.STRIPE_WEBHOOK_SECRET;
+    // Fail closed: never trust an unsigned body. A valid signing secret is
+    // mandatory — without it we cannot prove the event came from Stripe, so an
+    // attacker could otherwise forge subscription state for any user.
+    if (!secret || secret.startsWith('whsec_xxx')) {
+      console.error('Webhook rejected: STRIPE_WEBHOOK_SECRET is not configured.');
+      return res.status(503).json({ error: 'Webhook not configured' });
+    }
     let event;
     try {
-      if (secret && !secret.startsWith('whsec_xxx')) {
-        event = getStripe().webhooks.constructEvent(req.body, sig, secret);
-      } else {
-        // No signing secret configured (local dev): trust the parsed body.
-        event = JSON.parse(req.body.toString('utf-8'));
-      }
+      event = getStripe().webhooks.constructEvent(req.body, sig, secret);
     } catch (err) {
       console.error('Webhook signature verification failed:', err.message);
       return res.status(400).send(`Webhook Error: ${err.message}`);
