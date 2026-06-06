@@ -43,7 +43,11 @@ function ensureLoaded() {
 
 function persist() {
   if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
-  fs.writeFileSync(DB_FILE, JSON.stringify(cache, null, 2));
+  // Atomic write: write to a temp file then rename, so a crash mid-write can
+  // never corrupt the data file (rename is atomic on the same filesystem).
+  const tmp = `${DB_FILE}.${process.pid}.tmp`;
+  fs.writeFileSync(tmp, JSON.stringify(cache, null, 2));
+  fs.renameSync(tmp, DB_FILE);
 }
 
 export const db = {

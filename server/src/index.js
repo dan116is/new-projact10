@@ -152,8 +152,21 @@ export default app;
 
 // Start the server only when run directly (not when imported by tests).
 if (process.argv[1] && process.argv[1].endsWith('index.js')) {
-  app.listen(PORT, () => {
+  if (process.env.NODE_ENV === 'production' && !process.env.CORS_ORIGIN) {
+    console.warn('⚠️  CORS_ORIGIN is not set in production — all origins are allowed.');
+  }
+  const server = app.listen(PORT, () => {
     console.log(`API listening on http://localhost:${PORT}`);
     console.log(`Stripe configured: ${stripeConfigured()}`);
   });
+
+  // Graceful shutdown: stop accepting connections, then exit.
+  const shutdown = (signal) => {
+    console.log(`${signal} received — shutting down gracefully...`);
+    server.close(() => process.exit(0));
+    // Force-exit if connections linger.
+    setTimeout(() => process.exit(1), 10_000).unref();
+  };
+  process.on('SIGTERM', () => shutdown('SIGTERM'));
+  process.on('SIGINT', () => shutdown('SIGINT'));
 }

@@ -203,10 +203,51 @@ Hardening applied to the API:
 
 ---
 
+## 🚀 Production deployment
+
+### API (Docker)
+
+The server ships with a production `Dockerfile` (node:20-alpine, non-root, health
+check) and a root `docker-compose.yml`:
+
+```bash
+cp server/.env.example server/.env     # fill in NODE_ENV=production + real secrets
+docker compose up -d --build           # API on :4000, data persisted on a volume
+```
+
+Production checklist (enforced or warned by the app):
+
+- `NODE_ENV=production` — refuses to boot without a strong `JWT_SECRET` (≥32 chars).
+- Set an explicit **`CORS_ORIGIN`** (the app warns if it's left open in production).
+- Real Stripe **live** keys **and** a real **`STRIPE_WEBHOOK_SECRET`** — the webhook
+  fails closed (HTTP `503`) without it, so subscription state stays trustworthy.
+- Serve behind TLS (the app sets `trust proxy` for correct client IPs).
+- The container persists the JSON store on the `api-data` volume. For **horizontal
+  scaling**, point the data layer at Postgres (single-writer JSON store does not
+  share across instances).
+
+CI/CD: `.github/workflows/deploy.yml` build-validates the image on PRs and
+publishes `ghcr.io/<owner>/<repo>-api:latest` (+ a `sha` tag) on pushes to `main`.
+
+### Mobile (EAS)
+
+`mobile/eas.json` defines `development` / `preview` / `production` build profiles.
+
+```bash
+npm i -g eas-cli && eas login
+# set production secrets (API URL is in eas.json; keep keys out of git):
+eas secret:create --name EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY --value pk_live_xxx
+eas build --profile production --platform all     # build for the stores
+eas submit --profile production --platform all    # upload to App Store / Play
+```
+
+Point `EXPO_PUBLIC_API_URL` (in `eas.json`) at your deployed HTTPS API. Stripe
+PaymentSheet requires a native build (these store builds), not Expo Go web.
+
 ## ⚠️ Notes
 
-- The backend uses a JSON-file store for zero-setup demos. Swap `db.js` for a
-  real database (Postgres/Mongo) before production.
+- The backend uses a JSON-file store for zero-setup demos (atomic writes for
+  durability). Swap the data layer for Postgres/Mongo to scale horizontally.
 - For production set `NODE_ENV=production`, a long random `JWT_SECRET`
   (`node -e "console.log(require('crypto').randomBytes(48).toString('hex'))"`),
   an explicit `CORS_ORIGIN`, real Stripe **live** keys, and serve over HTTPS.
