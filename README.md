@@ -17,6 +17,7 @@ Built for the **Israeli market** 🇮🇱 — Hebrew, full RTL, ₪ pricing, Isr
 - **מנוי חודשי דו-שכבתי / Two-tier monthly subscription** — **בסיסי** (₪49) ו-**פרו** (₪99) דרך Stripe PaymentSheet, webhook לסנכרון, ו-**תקופת ניסיון חינם** (`STRIPE_TRIAL_DAYS`). מנויי **פרו** מקבלים מיקום מקודם: משרות הקבלן בראש החיפוש, ופרופיל הפועל בראש ספריית הפועלים (תג ⭐).
 - **Workflow מלא**: קבלן מפרסם משרה ← פועל מגיש מועמדות ← קבלן מאשר/דוחה ← נפתח צ׳אט ופרטי הקשר נחשפים.
 - **Premium gating** — posting jobs (contractors) and applying (workers) require an active subscription (HTTP `402` otherwise).
+- **✅ סיום עבודה / Job completion** — the contractor marks a job "הושלמה", which notifies **both** sides to rate each other — closing the trust loop.
 - **⭐ דירוגים וביקורות / Ratings & reviews** — both sides rate each other after working together; profiles show an aggregated star rating. Verified "worked-together" requirement + duplicate protection.
 - **💬 צ׳אט פנימי / In-app chat** — a conversation opens automatically when an application is accepted; real messaging with unread tracking.
 - **🔔 התראות / Notifications** — generated on new applications, acceptances, reviews and messages.

@@ -340,6 +340,30 @@ test('Pro contractor jobs are flagged promoted and ranked first', async () => {
   assert.ok(list.data.jobs.some((j) => j.promoted === false));
 });
 
+test('completing a job notifies both sides to review', async () => {
+  const { status, data } = await req('PATCH', `/jobs/${ctx.jobId}`, {
+    token: ctx.contractorToken,
+    body: { status: 'completed' },
+  });
+  assert.equal(status, 200);
+  assert.equal(data.job.status, 'completed');
+
+  const wn = await req('GET', '/notifications', { token: ctx.workerToken });
+  const prompt = wn.data.notifications.find(
+    (n) => n.type === 'review' && n.title.includes('הושלמה')
+  );
+  assert.ok(prompt, 'worker should get a completion review prompt');
+  assert.equal(prompt.data.revieweeId, ctx.contractorId);
+});
+
+test('only the job owner can change its status', async () => {
+  const { status } = await req('PATCH', `/jobs/${ctx.jobId}`, {
+    token: ctx.workerToken, // workers cannot patch jobs at all
+    body: { status: 'open' },
+  });
+  assert.ok(status === 403);
+});
+
 test('malformed JSON returns 400, not 500', async () => {
   const res = await fetch(`${base}/auth/login`, {
     method: 'POST',

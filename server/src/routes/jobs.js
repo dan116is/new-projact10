@@ -3,6 +3,7 @@ import { Router } from 'express';
 import { randomUUID } from 'crypto';
 import { db } from '../db.js';
 import { requireAuth, requireRole, requireSubscription, publicUser, isPro } from '../auth.js';
+import { pushNotification } from '../notify.js';
 
 const router = Router();
 
@@ -138,6 +139,7 @@ router.patch('/:id', requireAuth, requireRole('contractor'), (req, res) => {
   if (description !== undefined) job.description = String(description).trim();
   if (location !== undefined) job.location = String(location).trim();
   if (budget !== undefined) job.budget = budget != null ? Number(budget) : null;
+  const prevStatus = job.status;
   if (status !== undefined) {
     if (!JOB_STATUSES.includes(status)) {
       return res.status(400).json({ error: `status must be one of: ${JOB_STATUSES.join(', ')}` });
@@ -145,6 +147,27 @@ router.patch('/:id', requireAuth, requireRole('contractor'), (req, res) => {
     job.status = status;
   }
   db.save();
+
+  // On completion, prompt both sides to review each other (closes the loop).
+  if (status === 'completed' && prevStatus !== 'completed') {
+    const accepted = db.data.applications.find(
+      (a) => a.jobId === job.id && a.status === 'accepted'
+    );
+    if (accepted) {
+      pushNotification(accepted.workerId, {
+        type: 'review',
+        title: 'העבודה הושלמה ✓',
+        body: `דרגו את ${req.user.name} על "${job.title}"`,
+        data: { jobId: job.id, revieweeId: job.contractorId },
+      });
+      pushNotification(job.contractorId, {
+        type: 'review',
+        title: 'העבודה הושלמה ✓',
+        body: `דרגו את הפועל על "${job.title}"`,
+        data: { jobId: job.id, revieweeId: accepted.workerId },
+      });
+    }
+  }
   res.json({ job: publicJob(job, { includeContractorContact: true }) });
 });
 
