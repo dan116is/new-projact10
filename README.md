@@ -21,6 +21,7 @@ Built for the **Israeli market** 🇮🇱 — Hebrew, full RTL, ₪ pricing, Isr
 - **💬 צ׳אט פנימי / In-app chat** — a conversation opens automatically when an application is accepted; real messaging with unread tracking.
 - **🔔 התראות / Notifications** — generated on new applications, acceptances, reviews and messages.
 - **✅ אימות / Verification** — a "מאומת" trust badge via a (mock) SMS OTP flow (demo code `1234`).
+- **🔎 חיפוש והתאמה / Search & smart matching** — workers get a personalised "מומלצות עבורך" feed ranked by trade + city, plus free-text/trade/city filtering; contractors get a searchable **workers directory** ranked by rating (premium, gated).
 - **🔎 לוקליזציה / Localization** — trade & city pickers from curated Israeli lists; VAT (מע"מ 18%) constant available.
 - **פרטיות / Privacy** — phone numbers are revealed only **after** an application is accepted.
 - JWT auth, profile management, dark RTL Hebrew UI.
@@ -152,7 +153,9 @@ to the same `pk_test_…`.
 | POST   | `/api/auth/register`                   | —           | `{name,email,password,role}`       |
 | POST   | `/api/auth/login`                      | —           |                                    |
 | GET    | `/api/auth/me`                         | bearer      | includes `isSubscribed`            |
-| GET    | `/api/jobs`                            | bearer      | open jobs (filters: trade/location)|
+| GET    | `/api/jobs`                            | bearer      | open jobs (filters: trade/location/q/minBudget) |
+| GET    | `/api/jobs/recommended`                | worker      | personalised feed ranked by match  |
+| GET    | `/api/workers`                         | contractor* | *requires sub — search workers     |
 | POST   | `/api/jobs`                            | contractor* | *requires subscription             |
 | GET    | `/api/jobs/mine`                       | contractor  |                                    |
 | POST   | `/api/applications/jobs/:id/apply`     | worker*     | *requires subscription             |

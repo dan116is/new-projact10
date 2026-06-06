@@ -48,6 +48,7 @@ export const api = {
 
   // jobs
   listJobs: (token, query = '') => request(`/jobs${query}`, { token }),
+  recommendedJobs: (token) => request('/jobs/recommended', { token }),
   myJobs: (token) => request('/jobs/mine', { token }),
   getJob: (id, token) => request(`/jobs/${id}`, { token }),
   createJob: (body, token) => request('/jobs', { method: 'POST', body, token }),

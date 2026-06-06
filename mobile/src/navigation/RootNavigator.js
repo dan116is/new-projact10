@@ -22,6 +22,7 @@ import ChatScreen from '../screens/ChatScreen';
 import NotificationsScreen from '../screens/NotificationsScreen';
 import ReviewsScreen from '../screens/ReviewsScreen';
 import LeaveReviewScreen from '../screens/LeaveReviewScreen';
+import WorkersScreen from '../screens/WorkersScreen';
 
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -92,6 +93,11 @@ function ContractorTabs() {
         name="MyJobs"
         component={MyJobsScreen}
         options={{ title: 'המשרות שלי', tabBarIcon: tabIcon('🏗️') }}
+      />
+      <Tab.Screen
+        name="Workers"
+        component={WorkersScreen}
+        options={{ title: 'פועלים', tabBarIcon: tabIcon('🔎') }}
       />
       <Tab.Screen
         name="Conversations"

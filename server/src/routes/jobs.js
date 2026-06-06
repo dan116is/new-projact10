@@ -28,7 +28,7 @@ function publicJob(job, { includeContractorContact = false } = {}) {
 
 // Browse open jobs (any authenticated user). Optional ?trade= & ?location= filters.
 router.get('/', requireAuth, (req, res) => {
-  const { trade, location, status } = req.query;
+  const { trade, location, status, q, minBudget } = req.query;
   let jobs = db.data.jobs;
   if (status) {
     jobs = jobs.filter((j) => j.status === status);
@@ -40,8 +40,39 @@ router.get('/', requireAuth, (req, res) => {
     jobs = jobs.filter((j) =>
       j.location?.toLowerCase().includes(String(location).toLowerCase())
     );
+  if (q) {
+    const needle = String(q).toLowerCase();
+    jobs = jobs.filter((j) =>
+      [j.title, j.description, j.trade, j.location]
+        .filter(Boolean)
+        .some((field) => field.toLowerCase().includes(needle))
+    );
+  }
+  if (minBudget) {
+    const min = Number(minBudget);
+    if (!Number.isNaN(min)) jobs = jobs.filter((j) => (j.budget ?? 0) >= min);
+  }
   jobs = [...jobs].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   res.json({ jobs: jobs.map((j) => publicJob(j)) });
+});
+
+// Personalised feed for workers: open jobs ranked by how well they match the
+// worker's trades + city, then recency.
+router.get('/recommended', requireAuth, requireRole('worker'), (req, res) => {
+  const trades = (req.user.profile?.trades || []).map((t) => t.toLowerCase());
+  const city = (req.user.profile?.city || '').toLowerCase();
+
+  const scored = db.data.jobs
+    .filter((j) => j.status === 'open')
+    .map((j) => {
+      let score = 0;
+      if (trades.includes((j.trade || '').toLowerCase())) score += 2;
+      if (city && (j.location || '').toLowerCase().includes(city)) score += 1;
+      return { job: j, score };
+    })
+    .sort((a, b) => b.score - a.score || b.job.createdAt.localeCompare(a.job.createdAt));
+
+  res.json({ jobs: scored.map((s) => ({ ...publicJob(s.job), matchScore: s.score })) });
 });
 
 // A contractor's own jobs.

@@ -53,4 +53,14 @@ export const apiExtra = {
     request(`/profiles/${userId}`, { token }),
   verifyPhone: (code, token) =>
     request('/profiles/verify', { method: 'POST', body: { code }, token }),
+
+  // Workers search
+  searchWorkers: ({ trade, city, q } = {}, token) => {
+    const params = [];
+    if (trade) params.push(`trade=${encodeURIComponent(trade)}`);
+    if (city) params.push(`city=${encodeURIComponent(city)}`);
+    if (q) params.push(`q=${encodeURIComponent(q)}`);
+    const queryString = params.length ? `?${params.join('&')}` : '';
+    return request(`/workers${queryString}`, { token });
+  },
 };

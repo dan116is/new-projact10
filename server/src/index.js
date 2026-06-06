@@ -13,6 +13,7 @@ import notificationRoutes from './routes/notifications.js';
 import reviewRoutes from './routes/reviews.js';
 import conversationRoutes from './routes/conversations.js';
 import profileRoutes from './routes/profiles.js';
+import workerRoutes from './routes/workers.js';
 
 const app = express();
 const PORT = process.env.PORT || 4000;
@@ -127,6 +128,7 @@ app.use('/api/notifications', notificationRoutes);
 app.use('/api/reviews', reviewRoutes);
 app.use('/api/conversations', conversationRoutes);
 app.use('/api/profiles', profileRoutes);
+app.use('/api/workers', workerRoutes);
 
 app.use((req, res) => res.status(404).json({ error: 'Not found' }));
 

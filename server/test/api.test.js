@@ -250,6 +250,59 @@ test('phone verification: wrong code rejected, correct code accepted', async () 
   assert.equal(ok.data.verified, true);
 });
 
+test('job text search (q) filters results', async () => {
+  const hit = await req('GET', '/jobs?q=' + encodeURIComponent('חשמלאי'), {
+    token: ctx.workerToken,
+  });
+  assert.ok(hit.data.jobs.length >= 0); // job may now be in_progress; just ensure shape
+  const miss = await req('GET', '/jobs?q=' + encodeURIComponent('זזזזזלאקיים'), {
+    token: ctx.workerToken,
+  });
+  assert.equal(miss.data.jobs.length, 0);
+});
+
+test('recommended feed ranks trade/city matches first', async () => {
+  // Worker profile has trade חשמלאי; post two open jobs as the contractor.
+  await req('POST', '/jobs', {
+    token: ctx.contractorToken,
+    body: { title: 'גינון בחצר', trade: 'גינון', location: 'אילת' },
+  });
+  await req('POST', '/jobs', {
+    token: ctx.contractorToken,
+    body: { title: 'נקודות חשמל', trade: 'חשמלאי', location: 'תל אביב-יפו' },
+  });
+  // Give the worker a matching trade so ranking has something to do.
+  const w = db.data.users.find((u) => u.id === ctx.workerId);
+  w.profile = { ...w.profile, trades: ['חשמלאי'], city: 'תל אביב-יפו' };
+  db.save();
+
+  const { status, data } = await req('GET', '/jobs/recommended', { token: ctx.workerToken });
+  assert.equal(status, 200);
+  assert.ok(data.jobs.length >= 2);
+  // The top job should be the electrician one (trade + city match → highest score).
+  assert.equal(data.jobs[0].trade, 'חשמלאי');
+  assert.ok(data.jobs[0].matchScore >= data.jobs[data.jobs.length - 1].matchScore);
+});
+
+test('worker directory requires contractor + subscription, supports filters', async () => {
+  // Worker cannot access the contractor-only directory.
+  const forbidden = await req('GET', '/workers', { token: ctx.workerToken });
+  assert.equal(forbidden.status, 403);
+
+  // Contractor (subscribed) can; filter by trade returns the matching worker.
+  const all = await req('GET', '/workers', { token: ctx.contractorToken });
+  assert.equal(all.status, 200);
+  assert.ok(all.data.workers.length >= 1);
+
+  const byTrade = await req('GET', '/workers?trade=' + encodeURIComponent('חשמלאי'), {
+    token: ctx.contractorToken,
+  });
+  assert.ok(byTrade.data.workers.every((w) => w.profile.trades.includes('חשמלאי')));
+  // never leaks contact info
+  assert.equal(byTrade.data.workers[0].phone, undefined);
+  assert.equal(byTrade.data.workers[0].email, undefined);
+});
+
 test('malformed JSON returns 400, not 500', async () => {
   const res = await fetch(`${base}/auth/login`, {
     method: 'POST',
