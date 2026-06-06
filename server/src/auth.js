@@ -29,6 +29,21 @@ export function signToken(user) {
   });
 }
 
+// Resolve the active plan tier: 'pro' | 'basic' | null (not subscribed).
+export function subscriptionTier(user) {
+  if (!isSubscriptionActive(user)) return null;
+  // Explicit tier (used by seed/demo and manual grants) takes precedence.
+  if (user.subscription?.tier) return user.subscription.tier;
+  const proPrice = process.env.STRIPE_PRICE_ID_PRO;
+  if (proPrice && user.subscription?.priceId === proPrice) return 'pro';
+  return 'basic';
+}
+
+// Pro members get promoted placement across feeds and the directory.
+export function isPro(user) {
+  return subscriptionTier(user) === 'pro';
+}
+
 // Strip sensitive fields before returning a user to the client.
 export function publicUser(user) {
   if (!user) return null;
@@ -37,6 +52,7 @@ export function publicUser(user) {
     ...rest,
     verified: !!user.verified,
     isSubscribed: isSubscriptionActive(user),
+    tier: subscriptionTier(user),
   };
 }
 

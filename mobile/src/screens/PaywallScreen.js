@@ -1,38 +1,33 @@
-import React, { useState } from 'react';
-import { View, Text, ScrollView, StyleSheet, Alert } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, Text, ScrollView, StyleSheet, Alert, TouchableOpacity } from 'react-native';
 import { useStripe } from '@stripe/stripe-react-native';
-import { Button, Card } from '../components/ui';
+import { Button, Card, Loader, Badge } from '../components/ui';
 import { useAuth } from '../context/AuthContext';
 import { api } from '../api';
-import { colors, spacing } from '../theme';
-import { SUBSCRIPTION_PRICE } from '../labels';
-
-const PERKS = {
-  worker: [
-    'גישה לכל המשרות הפתוחות',
-    'הגשת מועמדות ללא הגבלה',
-    'פרופיל מקצועי שקבלנים רואים',
-    'קבלת פרטי קשר של הקבלן לאחר אישור',
-  ],
-  contractor: [
-    'פרסום משרות ללא הגבלה',
-    'צפייה בכל המועמדים',
-    'אישור פועלים וקבלת פרטי הקשר שלהם',
-    'ניהול מלא של תהליך הגיוס',
-  ],
-};
+import { colors, spacing, radius } from '../theme';
 
 export default function PaywallScreen({ navigation }) {
   const { token, user, refreshUser } = useAuth();
   const { initPaymentSheet, presentPaymentSheet } = useStripe();
+  const [config, setConfig] = useState(null);
+  const [selected, setSelected] = useState('pro'); // default to the recommended tier
   const [loading, setLoading] = useState(false);
 
-  const perks = PERKS[user?.role] || PERKS.worker;
+  useEffect(() => {
+    (async () => {
+      try {
+        const cfg = await api.subConfig(token);
+        setConfig(cfg);
+      } catch {
+        // leave config null; subscribe() will surface a clear error
+      }
+    })();
+  }, [token]);
 
   async function subscribe() {
     setLoading(true);
     try {
-      const data = await api.paymentSheet(token);
+      const data = await api.paymentSheet(token, selected);
       if (!data.paymentIntentClientSecret) {
         throw new Error('השרת לא הגדיר את Stripe. ראה README להגדרת מפתחות.');
       }
@@ -69,23 +64,59 @@ export default function PaywallScreen({ navigation }) {
     }
   }
 
+  if (!config) {
+    return (
+      <View style={{ flex: 1, backgroundColor: colors.bg }}>
+        <Loader />
+      </View>
+    );
+  }
+
+  const plans = config.plans || [];
+  const selectedPlan = plans.find((p) => p.id === selected) || plans[0];
+
   return (
     <ScrollView style={{ backgroundColor: colors.bg }} contentContainerStyle={styles.container}>
-      <Text style={styles.title}>שדרגו למנוי פרימיום</Text>
-      <Text style={styles.price}>{SUBSCRIPTION_PRICE}</Text>
+      <Text style={styles.title}>בחרו את המסלול שלכם</Text>
       <Text style={styles.subtitle}>ביטול בכל עת. חיוב חודשי מתחדש.</Text>
+      {config.trialDays > 0 ? (
+        <Text style={styles.trial}>🎁 {config.trialDays} ימי ניסיון חינם</Text>
+      ) : null}
 
-      <Card style={{ marginTop: spacing.lg }}>
-        {perks.map((p) => (
-          <View key={p} style={styles.perkRow}>
-            <Text style={styles.check}>✓</Text>
-            <Text style={styles.perkText}>{p}</Text>
-          </View>
-        ))}
-      </Card>
+      {plans.map((plan) => {
+        const active = plan.id === selected;
+        return (
+          <TouchableOpacity
+            key={plan.id}
+            activeOpacity={0.9}
+            onPress={() => setSelected(plan.id)}
+          >
+            <Card style={[styles.planCard, active && styles.planCardActive]}>
+              <View style={styles.planHead}>
+                <View style={styles.planHeadRight}>
+                  <View style={[styles.radio, active && styles.radioActive]}>
+                    {active ? <View style={styles.radioDot} /> : null}
+                  </View>
+                  <Text style={styles.planName}>{plan.name}</Text>
+                  {plan.recommended ? <Badge label="מומלץ" tone="accepted" /> : null}
+                </View>
+                <Text style={styles.planPrice}>{plan.priceLabel}</Text>
+              </View>
+              {active
+                ? plan.perks.map((p) => (
+                    <View key={p} style={styles.perkRow}>
+                      <Text style={styles.check}>✓</Text>
+                      <Text style={styles.perkText}>{p}</Text>
+                    </View>
+                  ))
+                : null}
+            </Card>
+          </TouchableOpacity>
+        );
+      })}
 
       <Button
-        title="הצטרפות עכשיו"
+        title={`הצטרפות — ${selectedPlan?.priceLabel || ''}`}
         onPress={subscribe}
         loading={loading}
         style={{ marginTop: spacing.lg }}
@@ -104,16 +135,32 @@ export default function PaywallScreen({ navigation }) {
 const styles = StyleSheet.create({
   container: { padding: spacing.lg, paddingTop: spacing.xl },
   title: { color: colors.text, fontSize: 26, fontWeight: '800', textAlign: 'center' },
-  price: {
-    color: colors.primary,
-    fontSize: 32,
-    fontWeight: '800',
-    textAlign: 'center',
-    marginTop: spacing.sm,
-  },
   subtitle: { color: colors.textMuted, textAlign: 'center', marginTop: spacing.xs },
-  perkRow: { flexDirection: 'row-reverse', alignItems: 'center', marginBottom: spacing.md },
+  trial: { color: colors.primary, textAlign: 'center', marginTop: spacing.sm, fontWeight: '700' },
+  planCard: { marginTop: spacing.lg, borderWidth: 2, borderColor: colors.border },
+  planCardActive: { borderColor: colors.primary },
+  planHead: {
+    flexDirection: 'row-reverse',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: spacing.sm,
+  },
+  planHeadRight: { flexDirection: 'row-reverse', alignItems: 'center', gap: spacing.sm },
+  planName: { color: colors.text, fontSize: 20, fontWeight: '800' },
+  planPrice: { color: colors.primary, fontSize: 18, fontWeight: '800' },
+  radio: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    borderWidth: 2,
+    borderColor: colors.textMuted,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  radioActive: { borderColor: colors.primary },
+  radioDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: colors.primary },
+  perkRow: { flexDirection: 'row-reverse', alignItems: 'center', marginBottom: spacing.sm },
   check: { color: colors.success, fontSize: 18, fontWeight: '800', marginLeft: spacing.sm },
-  perkText: { color: colors.text, fontSize: 16, flex: 1, textAlign: 'right' },
+  perkText: { color: colors.text, fontSize: 15, flex: 1, textAlign: 'right' },
   secure: { color: colors.textMuted, textAlign: 'center', marginTop: spacing.lg, fontSize: 13 },
 });

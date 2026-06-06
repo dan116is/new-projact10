@@ -10,39 +10,60 @@
 //   4. The app refreshes GET /auth/me and sees isSubscribed: true.
 import { Router } from 'express';
 import { db } from '../db.js';
-import { requireAuth, publicUser } from '../auth.js';
+import { requireAuth, publicUser, subscriptionTier } from '../auth.js';
 import { getStripe, stripeConfigured, toStoredSubscription } from '../stripe.js';
 
 const router = Router();
 
-// Expose pricing / config so the app can render the paywall.
+// Expose pricing / plans so the app can render the paywall.
 router.get('/config', requireAuth, (req, res) => {
+  const isContractor = req.user.role === 'contractor';
+  const basicPerks = isContractor
+    ? [
+        'פרסום משרות ללא הגבלה',
+        'גישה לכל הפועלים המאומתים',
+        'צ׳אט ישיר עם מועמדים',
+        'דירוגים וביקורות לבניית מוניטין',
+        'התראות בזמן אמת על מועמדים חדשים',
+      ]
+    : [
+        'גישה לכל המשרות הפתוחות',
+        'הגשת מועמדות ללא הגבלה',
+        'צ׳אט ישיר עם קבלנים',
+        'פרופיל מקצועי עם דירוגים',
+        'התראות על משרות שמתאימות לך',
+      ];
+  const proExtras = isContractor
+    ? ['⭐ המשרות שלך מקודמות ובראש החיפוש', '🏅 תג "פרו" בולט', 'עדיפות בתוצאות לפועלים']
+    : ['⭐ הפרופיל שלך בראש ספריית הפועלים', '🏅 תג "פרו" בולט', 'עדיפות מול קבלנים'];
+
+  const plans = [
+    {
+      id: 'basic',
+      name: 'בסיסי',
+      priceLabel: process.env.SUBSCRIPTION_PRICE_LABEL || '₪49 / חודש',
+      priceId: process.env.STRIPE_PRICE_ID || null,
+      perks: basicPerks,
+    },
+    {
+      id: 'pro',
+      name: 'פרו',
+      priceLabel: process.env.SUBSCRIPTION_PRICE_LABEL_PRO || '₪99 / חודש',
+      priceId: process.env.STRIPE_PRICE_ID_PRO || null,
+      perks: [...basicPerks, ...proExtras],
+      recommended: true,
+    },
+  ];
+
   res.json({
     configured: stripeConfigured(),
     publishableKey: process.env.STRIPE_PUBLISHABLE_KEY || null,
-    priceId: process.env.STRIPE_PRICE_ID || null,
     trialDays: Number(process.env.STRIPE_TRIAL_DAYS || 0),
-    plan: {
-      name: 'מנוי מקצועי',
-      priceLabel: process.env.SUBSCRIPTION_PRICE_LABEL || '₪49 / חודש',
-      currency: 'ils',
-      perks:
-        req.user.role === 'contractor'
-          ? [
-              'פרסום משרות ללא הגבלה',
-              'גישה לכל הפועלים המאומתים',
-              'צ׳אט ישיר עם מועמדים',
-              'דירוגים וביקורות לבניית מוניטין',
-              'התראות בזמן אמת על מועמדים חדשים',
-            ]
-          : [
-              'גישה לכל המשרות הפתוחות',
-              'הגשת מועמדות ללא הגבלה',
-              'צ׳אט ישיר עם קבלנים',
-              'פרופיל מקצועי עם דירוגים',
-              'התראות על משרות שמתאימות לך',
-            ],
-    },
+    currentTier: subscriptionTier(req.user),
+    currency: 'ils',
+    plans,
+    // Backward-compatible single-plan field (basic).
+    plan: { name: plans[0].name, priceLabel: plans[0].priceLabel, perks: basicPerks },
   });
 });
 
@@ -71,9 +92,17 @@ router.post('/payment-sheet', requireAuth, async (req, res) => {
     if (!stripeConfigured()) {
       return res.status(503).json({ error: 'Stripe is not configured on the server' });
     }
-    const priceId = process.env.STRIPE_PRICE_ID;
+    // Pick the price for the requested plan tier ('basic' default, or 'pro').
+    const plan = req.body?.plan === 'pro' ? 'pro' : 'basic';
+    const priceId =
+      plan === 'pro' ? process.env.STRIPE_PRICE_ID_PRO : process.env.STRIPE_PRICE_ID;
     if (!priceId || priceId.startsWith('price_xxx')) {
-      return res.status(503).json({ error: 'STRIPE_PRICE_ID is not configured' });
+      return res.status(503).json({
+        error:
+          plan === 'pro'
+            ? 'STRIPE_PRICE_ID_PRO is not configured'
+            : 'STRIPE_PRICE_ID is not configured',
+      });
     }
     const stripe = getStripe();
     const customerId = await ensureCustomer(req.user);
@@ -96,11 +125,12 @@ router.post('/payment-sheet', requireAuth, async (req, res) => {
         payment_settings: { save_default_payment_method: 'on_subscription' },
         ...(trialDays > 0 ? { trial_period_days: trialDays } : {}),
         expand: ['latest_invoice.payment_intent'],
-        metadata: { userId: req.user.id },
+        metadata: { userId: req.user.id, plan },
       });
     }
 
-    req.user.subscription = toStoredSubscription(subscription);
+    // Persist the tier so the UI reflects it immediately (webhook confirms later).
+    req.user.subscription = { ...toStoredSubscription(subscription), tier: plan };
     db.save();
 
     const ephemeralKey = await stripe.ephemeralKeys.create(

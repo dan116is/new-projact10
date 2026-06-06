@@ -2,7 +2,7 @@
 // Premium contractor feature — drives the value of the subscription.
 import { Router } from 'express';
 import { db } from '../db.js';
-import { requireAuth, requireRole, requireSubscription } from '../auth.js';
+import { requireAuth, requireRole, requireSubscription, isPro } from '../auth.js';
 
 const router = Router();
 
@@ -18,11 +18,13 @@ function ratingFor(userId) {
 }
 
 // Public worker card — never exposes email/phone.
+// Pro workers are flagged `promoted` for badge + top placement.
 function publicWorker(user) {
   return {
     id: user.id,
     name: user.name,
     verified: !!user.verified,
+    promoted: isPro(user),
     profile: {
       trades: user.profile?.trades || [],
       city: user.profile?.city || null,
@@ -58,6 +60,7 @@ router.get('/', requireAuth, requireRole('contractor'), requireSubscription, (re
   }
 
   const cards = workers.map(publicWorker).sort((a, b) => {
+    if (a.promoted !== b.promoted) return Number(b.promoted) - Number(a.promoted);
     const ra = a.rating.average ?? -1;
     const rb = b.rating.average ?? -1;
     if (rb !== ra) return rb - ra;

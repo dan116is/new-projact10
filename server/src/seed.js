@@ -8,13 +8,17 @@ import { hashPassword } from './auth.js';
 db.reset();
 
 // A demo subscription far in the future so gated features work without Stripe.
-const activeSub = {
-  id: 'demo_sub',
-  status: 'active',
-  priceId: 'demo_price',
-  currentPeriodEnd: Math.floor(Date.now() / 1000) + 60 * 60 * 24 * 365,
-  cancelAtPeriodEnd: false,
-};
+// Each user gets its own subscription object (no shared reference).
+function demoSub(tier) {
+  return {
+    id: `demo_sub_${tier}`,
+    status: 'active',
+    priceId: `demo_price_${tier}`,
+    tier,
+    currentPeriodEnd: Math.floor(Date.now() / 1000) + 60 * 60 * 24 * 365,
+    cancelAtPeriodEnd: false,
+  };
+}
 
 const contractor = {
   id: randomUUID(),
@@ -26,7 +30,7 @@ const contractor = {
   profile: { company: 'דני בנייה בע"מ', city: 'תל אביב-יפו' },
   verified: true,
   stripeCustomerId: null,
-  subscription: activeSub,
+  subscription: demoSub('pro'),
   createdAt: new Date().toISOString(),
 };
 
@@ -40,7 +44,7 @@ const worker = {
   profile: { trades: ['חשמלאי', 'גבס'], hourlyRate: 90, experienceYears: 8, city: 'רמת גן' },
   verified: true,
   stripeCustomerId: null,
-  subscription: activeSub,
+  subscription: demoSub('basic'),
   createdAt: new Date().toISOString(),
 };
 

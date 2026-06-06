@@ -14,7 +14,7 @@ monthly subscription billed through Stripe.
 Built for the **Israeli market** 🇮🇱 — Hebrew, full RTL, ₪ pricing, Israeli trades & cities, and IL mobile-number validation.
 
 - **שני סוגי משתמשים / Two roles** — פועל (worker) או קבלן (contractor), נבחר בהרשמה.
-- **מנוי חודשי / Monthly subscription** — real Stripe recurring billing via PaymentSheet, with a webhook keeping subscription state in sync, plus an optional **free trial** (`STRIPE_TRIAL_DAYS`) to drive conversion.
+- **מנוי חודשי דו-שכבתי / Two-tier monthly subscription** — **בסיסי** (₪49) ו-**פרו** (₪99) דרך Stripe PaymentSheet, webhook לסנכרון, ו-**תקופת ניסיון חינם** (`STRIPE_TRIAL_DAYS`). מנויי **פרו** מקבלים מיקום מקודם: משרות הקבלן בראש החיפוש, ופרופיל הפועל בראש ספריית הפועלים (תג ⭐).
 - **Workflow מלא**: קבלן מפרסם משרה ← פועל מגיש מועמדות ← קבלן מאשר/דוחה ← נפתח צ׳אט ופרטי הקשר נחשפים.
 - **Premium gating** — posting jobs (contractors) and applying (workers) require an active subscription (HTTP `402` otherwise).
 - **⭐ דירוגים וביקורות / Ratings & reviews** — both sides rate each other after working together; profiles show an aggregated star rating. Verified "worked-together" requirement + duplicate protection.

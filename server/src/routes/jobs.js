@@ -2,19 +2,21 @@
 import { Router } from 'express';
 import { randomUUID } from 'crypto';
 import { db } from '../db.js';
-import { requireAuth, requireRole, requireSubscription, publicUser } from '../auth.js';
+import { requireAuth, requireRole, requireSubscription, publicUser, isPro } from '../auth.js';
 
 const router = Router();
 
 const JOB_STATUSES = ['open', 'in_progress', 'completed', 'cancelled'];
 
 // Public-facing job shape, enriched with contractor + application counts.
+// Jobs posted by Pro contractors are flagged `promoted` for badge + ranking.
 function publicJob(job, { includeContractorContact = false } = {}) {
   const contractor = db.data.users.find((u) => u.id === job.contractorId);
   const applications = db.data.applications.filter((a) => a.jobId === job.id);
   return {
     ...job,
     applicationsCount: applications.length,
+    promoted: contractor ? isPro(contractor) : false,
     contractor: contractor
       ? {
           id: contractor.id,
@@ -52,8 +54,14 @@ router.get('/', requireAuth, (req, res) => {
     const min = Number(minBudget);
     if (!Number.isNaN(min)) jobs = jobs.filter((j) => (j.budget ?? 0) >= min);
   }
-  jobs = [...jobs].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
-  res.json({ jobs: jobs.map((j) => publicJob(j)) });
+  // Promoted (Pro) jobs first, then most recent.
+  const cards = jobs
+    .map((j) => publicJob(j))
+    .sort(
+      (a, b) =>
+        Number(b.promoted) - Number(a.promoted) || b.createdAt.localeCompare(a.createdAt)
+    );
+  res.json({ jobs: cards });
 });
 
 // Personalised feed for workers: open jobs ranked by how well they match the
@@ -65,14 +73,16 @@ router.get('/recommended', requireAuth, requireRole('worker'), (req, res) => {
   const scored = db.data.jobs
     .filter((j) => j.status === 'open')
     .map((j) => {
+      const card = publicJob(j);
       let score = 0;
+      if (card.promoted) score += 3; // Pro contractors get promoted placement
       if (trades.includes((j.trade || '').toLowerCase())) score += 2;
       if (city && (j.location || '').toLowerCase().includes(city)) score += 1;
-      return { job: j, score };
+      return { card, score };
     })
-    .sort((a, b) => b.score - a.score || b.job.createdAt.localeCompare(a.job.createdAt));
+    .sort((a, b) => b.score - a.score || b.card.createdAt.localeCompare(a.card.createdAt));
 
-  res.json({ jobs: scored.map((s) => ({ ...publicJob(s.job), matchScore: s.score })) });
+  res.json({ jobs: scored.map((s) => ({ ...s.card, matchScore: s.score })) });
 });
 
 // A contractor's own jobs.

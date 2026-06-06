@@ -104,12 +104,13 @@ export default function WorkersScreen({ navigation }) {
     const hasRating = count > 0;
 
     return (
-      <Card>
-        {/* Name + verified badge */}
+      <Card style={item.promoted && { borderColor: colors.primary }}>
+        {/* Name + verified/promoted badges */}
         <View style={styles.row}>
-          {item.verified ? (
-            <Badge label="✓ מאומת" tone="accepted" />
-          ) : null}
+          <View style={{ flexDirection: 'row-reverse', gap: spacing.sm, alignItems: 'center' }}>
+            {item.promoted ? <Badge label="⭐ פרו" tone="pending" /> : null}
+            {item.verified ? <Badge label="✓ מאומת" tone="accepted" /> : null}
+          </View>
           <Text style={styles.name}>{item.name}</Text>
         </View>
 

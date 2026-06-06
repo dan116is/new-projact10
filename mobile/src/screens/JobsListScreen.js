@@ -156,9 +156,12 @@ export default function JobsListScreen({ navigation }) {
             activeOpacity={0.85}
             onPress={() => navigation.navigate('JobDetail', { jobId: item.id })}
           >
-            <Card>
+            <Card style={item.promoted && styles.promotedCard}>
               <View style={styles.row}>
-                <Badge label={jobStatusLabel[item.status] || item.status} tone={item.status} />
+                <View style={styles.badgeRow}>
+                  {item.promoted ? <Badge label="⭐ מקודם" tone="pending" /> : null}
+                  <Badge label={jobStatusLabel[item.status] || item.status} tone={item.status} />
+                </View>
                 <Text style={styles.trade}>{item.trade}</Text>
               </View>
               <Text style={styles.title}>{item.title}</Text>
@@ -201,6 +204,8 @@ const styles = StyleSheet.create({
   toggleTextActive: { color: colors.primary },
   filterActions: { flexDirection: 'row-reverse', gap: spacing.md, marginTop: spacing.sm },
   row: { flexDirection: 'row-reverse', justifyContent: 'space-between', alignItems: 'center' },
+  badgeRow: { flexDirection: 'row-reverse', gap: spacing.sm, alignItems: 'center' },
+  promotedCard: { borderColor: colors.primary },
   trade: { color: colors.primary, fontWeight: '700' },
   title: { color: colors.text, fontSize: 18, fontWeight: '700', marginTop: spacing.sm, textAlign: 'right' },
   desc: { color: colors.textMuted, marginTop: spacing.xs, textAlign: 'right' },

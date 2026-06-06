@@ -303,6 +303,43 @@ test('worker directory requires contractor + subscription, supports filters', as
   assert.equal(byTrade.data.workers[0].email, undefined);
 });
 
+test('subscription config exposes basic + pro plans and current tier', async () => {
+  const { status, data } = await req('GET', '/subscriptions/config', {
+    token: ctx.contractorToken,
+  });
+  assert.equal(status, 200);
+  assert.equal(data.plans.length, 2);
+  assert.deepEqual(
+    data.plans.map((p) => p.id),
+    ['basic', 'pro']
+  );
+  // contractor was granted a plain (basic) subscription in earlier tests
+  assert.equal(data.currentTier, 'basic');
+});
+
+test('Pro contractor jobs are flagged promoted and ranked first', async () => {
+  // Upgrade the contractor to Pro via an explicit tier grant.
+  const c = db.data.users.find((u) => u.id === ctx.contractorId);
+  c.subscription.tier = 'pro';
+  db.save();
+
+  // A fresh basic contractor posts a (newer) job.
+  const basic = await req('POST', '/auth/register', {
+    body: { name: 'בסיס', email: 'basic@test.com', password: 'secret1', role: 'contractor' },
+  });
+  grantSubscription(basic.data.user.id); // basic tier
+  await req('POST', '/jobs', {
+    token: basic.data.token,
+    body: { title: 'עבודה רגילה', trade: 'צבע', location: 'חיפה' },
+  });
+
+  const list = await req('GET', '/jobs', { token: ctx.workerToken });
+  assert.equal(list.status, 200);
+  // Promoted (Pro) jobs must sort ahead of the newer non-promoted one.
+  assert.equal(list.data.jobs[0].promoted, true);
+  assert.ok(list.data.jobs.some((j) => j.promoted === false));
+});
+
 test('malformed JSON returns 400, not 500', async () => {
   const res = await fetch(`${base}/auth/login`, {
     method: 'POST',

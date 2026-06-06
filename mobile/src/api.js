@@ -67,7 +67,12 @@ export const api = {
 
   // subscriptions
   subConfig: (token) => request('/subscriptions/config', { token }),
-  paymentSheet: (token) => request('/subscriptions/payment-sheet', { method: 'POST', token }),
+  paymentSheet: (token, plan) =>
+    request('/subscriptions/payment-sheet', {
+      method: 'POST',
+      body: plan ? { plan } : undefined,
+      token,
+    }),
   refreshSub: (token) => request('/subscriptions/refresh', { method: 'POST', token }),
   cancelSub: (token) => request('/subscriptions/cancel', { method: 'POST', token }),
 };

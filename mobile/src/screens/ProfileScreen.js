@@ -5,7 +5,6 @@ import { useAuth } from '../context/AuthContext';
 import { api } from '../api';
 import { apiExtra } from '../apiExtra';
 import { colors, spacing } from '../theme';
-import { SUBSCRIPTION_PRICE } from '../labels';
 
 export default function ProfileScreen({ navigation }) {
   const { user, token, logout, updateProfile, refreshUser } = useAuth();
@@ -91,8 +90,14 @@ export default function ProfileScreen({ navigation }) {
           <View style={styles.badges}>
             {user?.verified ? <Badge label="✓ מאומת" tone="accepted" /> : null}
             <Badge
-              label={user?.isSubscribed ? 'מנוי פעיל' : 'ללא מנוי'}
-              tone={user?.isSubscribed ? 'accepted' : 'withdrawn'}
+              label={
+                user?.isSubscribed
+                  ? user?.tier === 'pro'
+                    ? 'מנוי פרו ⭐'
+                    : 'מנוי בסיסי'
+                  : 'ללא מנוי'
+              }
+              tone={user?.isSubscribed ? (user?.tier === 'pro' ? 'pending' : 'accepted') : 'withdrawn'}
             />
           </View>
         </View>
@@ -156,8 +161,18 @@ export default function ProfileScreen({ navigation }) {
         <Text style={styles.section}>מנוי</Text>
         {user?.isSubscribed ? (
           <>
-            <Text style={styles.subInfo}>המנוי שלך פעיל ({SUBSCRIPTION_PRICE}).</Text>
-            <Button title="ביטול מנוי" variant="ghost" onPress={cancelSubscription} />
+            <Text style={styles.subInfo}>
+              {user?.tier === 'pro' ? 'מנוי פרו פעיל ⭐' : 'מנוי בסיסי פעיל'}.
+            </Text>
+            {user?.tier !== 'pro' ? (
+              <Button title="⭐ שדרגו לפרו" onPress={() => navigation.navigate('Paywall')} />
+            ) : null}
+            <Button
+              title="ביטול מנוי"
+              variant="ghost"
+              onPress={cancelSubscription}
+              style={{ marginTop: spacing.sm }}
+            />
           </>
         ) : (
           <>
